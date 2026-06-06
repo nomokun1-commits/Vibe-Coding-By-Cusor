@@ -26,3 +26,9 @@ Temporary Items
 
 .obsidian/
 .DS_Store
+
+# company_research
+company_research/.env
+company_research/reports/
+__pycache__/
+*.pyc
