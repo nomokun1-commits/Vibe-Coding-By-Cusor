@@ -10,7 +10,7 @@ import datetime as dt
 
 import anthropic
 
-MODEL = "claude-haiku-4-5"  # 安価なモデルで要約
+MODEL = "claude-opus-4-8"  # 最も高性能なモデルで要約
 
 REPORT_TEMPLATE = """\
 # {company} 企業調査レポート
@@ -91,8 +91,9 @@ def synthesize_report(
 
     response = client.messages.create(
         model=MODEL,
-        max_tokens=8000,
+        max_tokens=16000,
         system=SYSTEM_PROMPT.format(today=today),
+        thinking={"type": "adaptive"},
         messages=[
             {
                 "role": "user",

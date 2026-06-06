@@ -10,9 +10,11 @@
 - **EDINET API**（金融庁）— 有価証券報告書などの開示書類（無料、APIキー不要）
 
 要約・整形:
-- **Claude API (Haiku 4.5)** — 上記の素材を9セクションのテンプレートに沿って構造化
+- **Claude API (Opus 4.8 + adaptive thinking)** — 上記の素材を9セクションのテンプレートに沿って構造化
 
-有料の検索APIや情報取得サービスは使いません。AnthropicのAPI料金のみ発生します（1回あたり概ね数円〜十数円）。
+有料の検索APIや情報取得サービスは使いません。AnthropicのAPI料金のみ発生します（Opus 4.8 利用で1回あたり概ね $0.10〜$0.30 程度）。
+
+コストを抑えたい場合は `research.py` の `MODEL` を `claude-sonnet-4-6` や `claude-haiku-4-5` に変更してください。
 
 ## セットアップ
 
