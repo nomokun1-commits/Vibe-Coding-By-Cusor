@@ -1,7 +1,8 @@
-"""Claude APIを使った企業情報リサーチ。
+"""Claude API で収集済み素材を要約し、定型レポートを生成する。
 
-Anthropic公式SDKの web_search / web_fetch サーバーサイドツールで
-最新情報を収集し、定型テンプレートで報告書を生成する。
+Web検索などの有料API呼び出しは行わない。
+情報は事前に収集された素材 (Wikipedia / Google News RSS / EDINET) を
+Claudeに渡して構造化・要約してもらう。
 """
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ import datetime as dt
 
 import anthropic
 
-MODEL = "claude-opus-4-8"
+MODEL = "claude-haiku-4-5"  # 安価なモデルで要約
 
 REPORT_TEMPLATE = """\
 # {company} 企業調査レポート
@@ -49,44 +50,57 @@ SYSTEM_PROMPT = """\
 あなたは企業調査専門のリサーチアナリストです。
 日本語で、ビジネス報告書として通用する明確で簡潔な文章を書きます。
 
-調査の進め方:
-1. web_search ツールで最新情報を複数の信頼できるソース (公式IR、日経、東洋経済、Bloomberg、Reuters など) から収集する
-2. 必要に応じて web_fetch ツールで重要なページの詳細を取得する
-3. 推測や憶測は書かず、確認できた事実のみを記載する
-4. 情報源が不明な項目は「公開情報からは確認できず」と明記する
-5. 提示されたテンプレートの全セクションを埋める
-6. 各事実の根拠となるURLを情報源セクションにまとめる
+執筆ルール:
+1. 提供された素材 (Wikipedia / Google Newsの見出し / EDINETの開示一覧) のみを根拠とする
+2. 推測や憶測、素材にない情報は書かない
+3. 確認できない項目は「公開情報からは確認できず」と明記する
+4. 提示されたテンプレートの全セクションを必ず埋める（情報がなくても見出しは残す）
+5. 各事実の根拠となるURLを情報源セクションにまとめる
+6. ニュース見出しから読み取れる動向は要約してよいが、見出しに無い詳細を捏造しない
 
 日付の基準: 本日は {today}。「最新」とは過去6ヶ月以内の情報を指す。
 """
 
 
-def research_company(company_name: str, edinet_summary: str | None = None) -> str:
-    """企業名を受け取り、Markdown形式の調査レポートを返す。"""
+def build_user_prompt(
+    company: str,
+    wikipedia_summary: str,
+    news_summary: str,
+    edinet_summary: str,
+) -> str:
+    today = dt.date.today().isoformat()
+    return (
+        f"以下のテンプレートに沿って「{company}」の企業調査レポートを作成してください。\n"
+        f"素材として渡す情報源だけを根拠にしてください。\n\n"
+        f"=== テンプレート ===\n"
+        f"{REPORT_TEMPLATE.format(company=company, date=today)}\n"
+        f"=== Wikipedia 要約 ===\n{wikipedia_summary}\n\n"
+        f"=== Google News (直近の関連ニュース見出し) ===\n{news_summary}\n\n"
+        f"=== EDINET (直近の開示書類) ===\n{edinet_summary}\n"
+    )
+
+
+def synthesize_report(
+    company: str,
+    wikipedia_summary: str,
+    news_summary: str,
+    edinet_summary: str,
+) -> str:
     client = anthropic.Anthropic()
     today = dt.date.today().isoformat()
 
-    user_prompt = (
-        f"以下のテンプレートに従って「{company_name}」の企業調査レポートを作成してください。\n\n"
-        f"テンプレート:\n{REPORT_TEMPLATE.format(company=company_name, date=today)}\n"
-    )
-    if edinet_summary:
-        user_prompt += (
-            f"\n参考: EDINET (金融庁開示書類API) で取得した直近の開示書類:\n"
-            f"{edinet_summary}\n"
-            "これらの一次情報も活用してください。\n"
-        )
-
     response = client.messages.create(
         model=MODEL,
-        max_tokens=16000,
+        max_tokens=8000,
         system=SYSTEM_PROMPT.format(today=today),
-        thinking={"type": "adaptive"},
-        tools=[
-            {"type": "web_search_20260209", "name": "web_search"},
-            {"type": "web_fetch_20260209", "name": "web_fetch"},
+        messages=[
+            {
+                "role": "user",
+                "content": build_user_prompt(
+                    company, wikipedia_summary, news_summary, edinet_summary
+                ),
+            }
         ],
-        messages=[{"role": "user", "content": user_prompt}],
     )
 
     parts: list[str] = []
